@@ -23,7 +23,7 @@ app.get('/api/health', async (_req, res) => {
 
 app.get('/api/questions', async (_req, res) => {
   const { rows } = await db.query(
-    'SELECT * FROM questions ORDER BY id DESC LIMIT 10',
+    'SELECT * FROM questions ORDER BY id DESC LIMIT 10'
   );
   res.json(rows);
 });
