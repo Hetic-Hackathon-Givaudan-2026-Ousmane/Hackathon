@@ -115,7 +115,7 @@ Frontend (Vite)
     ↓ HTTP POST /api/ask
 Backend (Express)
     ↓ HTTP/API Call
-LLM Provider (OpenAI / Anthropic / etc)
+LLM Provider (OpenAI / Anthropic / Ollama / Équipe Data)
     ↓ Streaming response
 Frontend (WebSocket / SSE)
     ↓ Affiche réponse en temps réel
@@ -128,18 +128,245 @@ Frontend (WebSocket / SSE)
 - ✅ **Temps de latence minimal** - pas de couche intermédiaire
 - ✅ **Contrôle budget** - rate limiting au niveau backend
 - ✅ **Sécurité** - API key protégée côté serveur
-- ✅ **Flexibility** - swappable en 5 min (OpenAI → Anthropic → Ollama)
+- ✅ **Flexibility** - swappable en 5 min entre providers
 
-### Provider: Flexible (OpenAI or Anthropic)
+---
 
-**Justification multi-provider:**
+## 🔤 Options IA Disponibles (4 Choix)
 
-- ✅ **Budget** - tarifs varient, pouvoir switcher vite
-- ✅ **Disponibilité** - si un provider est down, switch à l'autre
-- ✅ **Perf** - Anthropic plus long-context, OpenAI plus rapide
-- ✅ **Légal** - pas de dépendance à un seul vendor
+### Option 1: API Commerciale (OpenAI / Anthropic) ⭐ RECOMMANDÉE
 
-**Fallback local:** Ollama si budget/internet limitées
+**Mise en Place:**
+
+```bash
+# 1. Obtenir clé API (https://platform.openai.com/keys)
+# 2. Ajouter à api/.env
+OPENAI_API_KEY=sk-...
+
+# 3. Appel dans Express
+const response = await openai.chat.completions.create({
+  model: "gpt-4",
+  messages: [{ role: "user", content: question }]
+});
+```
+
+**Pros:**
+
+- ✅ **Qualité élevée** - GPT-4, Claude 3, modèles SOTA
+- ✅ **Rapidité** - réponses en 1-2s
+- ✅ **Zéro setup** - juste une clé API
+- ✅ **Contexte long** - jusqu'à 200k tokens
+- ✅ **Production-ready** - infra robuste
+
+**Cons:**
+
+- ❌ **Coût** - ~$0.01-0.03 par requête
+- ❌ **Données partent** - hors de votre contrôle
+- ❌ **Internet requis** - pas d'offline
+
+**Budget Hackathon:** ~$5-20 (1000-2000 appels tests)
+
+**Quand choisir:** Meilleure qualité, budget OK, démo impressionnante
+
+---
+
+### Option 2: Ollama sur Votre Machine (Local)
+
+**Mise en Place:**
+
+```bash
+# 1. Installer Ollama (https://ollama.com/)
+# 2. Télécharger un modèle
+ollama pull mistral        # 7B (fast)
+ollama pull llama2         # 7B (good quality)
+ollama pull neural-chat    # 7B (chatbot optimized)
+
+# 3. Appel dans Express
+const response = await fetch('http://localhost:11434/api/generate', {
+  method: 'POST',
+  body: JSON.stringify({
+    model: 'mistral',
+    prompt: question
+  })
+});
+```
+
+**Pros:**
+
+- ✅ **Gratuit** - aucun coût d'API
+- ✅ **Données locales** - tout reste sur votre machine
+- ✅ **Offline** - fonctionne sans Internet
+- ✅ **Contrôle total** - modèle peut être fine-tuned
+- ✅ **Simple** - ~5 min setup
+
+**Cons:**
+
+- ❌ **Qualité modeste** - petits modèles (7B max réaliste)
+- ❌ **Lent sans GPU** - 5-30s par réponse sur CPU
+- ❌ **GPU macOS** - meilleur perf sur Apple Silicon
+- ❌ **GPU Linux/Windows** - besoin NVIDIA CUDA
+- ❌ **Usage RAM** - 7B = 4-8GB RAM requis
+
+**Performance:**
+
+- Apple Silicon: Rapide (GPU natif) ⭐
+- NVIDIA GPU: Très rapide (CUDA)
+- CPU seul: Lent (5-30s par réponse)
+
+**Quand choisir:** Pas de budget, données sensibles, démo locale
+
+---
+
+### Option 3: Ollama en Conteneur (Docker Compose) ⭐ RECOMMANDÉE
+
+**Mise en Place:**
+
+```yaml
+# compose.yaml (ajouter)
+services:
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - '11434:11434'
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+
+volumes:
+  ollama_data:
+```
+
+```bash
+# 1. Démarrer le container
+docker compose up ollama
+
+# 2. Télécharger modèle (dans le container)
+docker exec <container_id> ollama pull mistral
+
+# 3. Appel dans Express
+const response = await fetch('http://ollama:11434/api/generate', {
+  method: 'POST',
+  body: JSON.stringify({
+    model: 'mistral',
+    prompt: question
+  })
+});
+```
+
+**Pros:**
+
+- ✅ **Gratuit** - aucun coût
+- ✅ **Reproductible** - même infra partout (Dev Container)
+- ✅ **Données locales** - tout reste sur votre machine
+- ✅ **Scalable** - facile de changer le modèle
+- ✅ **Intégré** - compose.yaml = tout ensemble
+
+**Cons:**
+
+- ❌ **Qualité modeste** - petits modèles (7B)
+- ❌ **Lent sans GPU** - 5-30s par réponse
+- ❌ **Stockage** - modèle = 4-8GB d'espace disque
+- ❌ **Infra plus lourd** - un service de plus à maintenir
+
+**Quand choisir:** Meilleur compromis pour hackathon (setup facile + data local)
+
+---
+
+### Option 4: API Équipe Data/IA (Tunnel ngrok)
+
+**Mise en Place:**
+
+```bash
+# 1. Contacter équipe Data/IA
+# 2. Recevoir URL ngrok
+export IA_API_URL=https://xxx-xxx.ngrok.io
+
+# 3. Appel dans Express
+const response = await fetch(`${process.env.IA_API_URL}/ask`, {
+  method: 'POST',
+  body: JSON.stringify({ question })
+});
+```
+
+**Pros:**
+
+- ✅ **Gratuit** - dans les limites de ngrok
+- ✅ **Qualité variable** - celle du modèle de l'équipe
+- ✅ **Support** - équipe Data/IA peut aider
+
+**Cons:**
+
+- ❌ **Dépendance externe** - pas contrôle sur l'infra
+- ❌ **Latence** - aller-retour Internet + ngrok
+- ❌ **Données partagées** - passent par ngrok
+- ❌ **Limites ngrok** - bande passante/requêtes limitées
+- ❌ **Instabilité** - tunnel peut crash
+
+**Quand choisir:** Collaboration équipe Data/IA, modèle custom spécialisé
+
+---
+
+## 📊 Comparaison Détaillée
+
+| Critère         | API Commerciale   | Ollama Local           | Ollama Conteneur       | Équipe Data/IA  |
+| --------------- | ----------------- | ---------------------- | ---------------------- | --------------- |
+| **Coût**        | ~$5-20/hackathon  | Gratuit                | Gratuit                | Gratuit*        |
+| **Qualité**     | ⭐⭐⭐⭐⭐ Élevée | ⭐⭐ Modeste           | ⭐⭐ Modeste           | ⭐⭐⭐ Variable |
+| **Vitesse**     | 1-2s              | 5-30s (CPU) / 1s (GPU) | 5-30s (CPU) / 1s (GPU) | 2-5s + latence  |
+| **Setup**       | 5 min             | 10 min                 | 5 min                  | 15 min          |
+| **Données**     | Quittent machine  | Restent local          | Restent local          | Par ngrok       |
+| **Offline**     | Non               | Oui                    | Oui                    | Non             |
+| **Scalabilité** | Infinie           | Limitée                | Limitée                | Dépend équipe   |
+
+---
+
+## 🎯 Recommandation Tech-Lead
+
+**Pour hackathon, nous recommandons:**
+
+### 🥇 Option 3: Ollama Conteneur (PRÉFÉRÉ)
+
+- **Avantages:** Setup facile, reproductible, données locales, gratuit
+- **Usage:** Démo interne, tests, présentations
+- **Setup:** 5 min (juste ajouter service compose.yaml)
+
+### 🥈 Option 1: API Commerciale (SI BUDGET OK)
+
+- **Avantages:** Meilleure qualité, réponses rapides, impressionnant
+- **Usage:** Démo finale, présentation clients
+- **Setup:** 5 min (juste clé API)
+
+### 🥉 Option 4: Équipe Data/IA (SI COLLABORATION)
+
+- **Avantages:** Modèle spécialisé, support équipe
+- **Usage:** Feedback, améliorations post-hackathon
+
+---
+
+## 🚀 Implementation Path
+
+```javascript
+// Backend abstraction (easy to swap)
+
+class IAProvider {
+  async ask(question: string): Promise<string> {
+    if (process.env.IA_PROVIDER === 'openai') {
+      return this.askOpenAI(question);
+    } else if (process.env.IA_PROVIDER === 'ollama') {
+      return this.askOllama(question);
+    }
+  }
+}
+
+// Dans Express
+app.post('/api/ask', async (req, res) => {
+  const answer = await ia.ask(req.body.question);
+  res.json({ answer });
+});
+```
+
+**Changement provider:** Modifier une variable d'env + 1 ligne dans le code
 
 ---
 
